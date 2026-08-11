@@ -1,0 +1,8 @@
+__pycache__/
+
+data/
+notes/
+schema.sql
+world_cup.db
+create_db.py
+scr/getting_data/downloaded_files/
