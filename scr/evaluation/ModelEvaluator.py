@@ -2,17 +2,16 @@ import pandas as pd
 import numpy as np
 
 import sqlite3
-from pathlib import Path
 import json
 import time
 
-
-BASE_DIR = Path(__file__).resolve().parents[2]
-DB_DIR = BASE_DIR / "football_project.db"
+import save_to_db
+from paths import DB_PATH
 
 class ModelEvaluator:
     def __init__(self, models, model_inputs, df, group_size=3,
-                 _a=True, _l_l=True, _b_s=True, _e_g_e=True):
+                 _a=True, _l_l=True, _b_s=True, _e_g_e=True,
+                 save_params=False):
         """
 
         :param models: dictionary of all the models
@@ -33,6 +32,7 @@ class ModelEvaluator:
         self.group_size = group_size
         self.train_test_groupings = None
 
+        # should metrics be used?
         self._a = _a
         self._l_l = _l_l
         self._b_s = _b_s
@@ -41,6 +41,7 @@ class ModelEvaluator:
         self.model_results = None
 
         self.db_name = "model_evaluation"
+        self.save_params = save_params
 
     def evaluate_models(self, del_old_tbl=True):
         """
@@ -61,7 +62,8 @@ class ModelEvaluator:
             for model_name, model_obj in self.models.items():
 
                 result_output = self._eval_one_model_split(model_name, model_obj, split_id,
-                                                           groups, train_set, test_set, valid_teams)
+                                                           groups, train_set, test_set, valid_teams,
+                                                           self.save_params)
 
                 self.model_results.append(result_output)
 
@@ -77,7 +79,7 @@ class ModelEvaluator:
 
         :return: returns the last saved database
         """
-        with sqlite3.connect(DB_DIR) as connect:
+        with sqlite3.connect(DB_PATH) as connect:
             query = f"""
                 SELECT *
                 FROM {self.db_name}
@@ -246,13 +248,13 @@ class ModelEvaluator:
         return train_set, test_set
 
     def _eval_one_model_split(self, model_name, model_obj, split_id, data_split,
-                              train_set, test_set, valid_teams):
+                              train_set, test_set, valid_teams, save_params):
         test_set["predicted_result"] = None
 
         model = model_obj(**self.model_inputs) # Initialise model
 
         fit_start = time.perf_counter() # Time the fit
-        model.fit(train_set, save_db=False) # Fit model
+        model.fit(train_set, save_db=save_params) # Fit model
         fitting_time = time.perf_counter() - fit_start
 
         predict_start = time.perf_counter() # Time the prediction
@@ -352,7 +354,7 @@ class ModelEvaluator:
 
         :return: Deletes the last saved database
         """
-        with sqlite3.connect(DB_DIR) as connect:
+        with sqlite3.connect(DB_PATH) as connect:
             cursor = connect.cursor()
 
             cursor.execute(
@@ -364,7 +366,7 @@ class ModelEvaluator:
 
         :return: Saves data from evaluation into a database
         """
-        with sqlite3.connect(DB_DIR) as connect:
+        with sqlite3.connect(DB_PATH) as connect:
             cursor = connect.cursor()
 
             query = f"""

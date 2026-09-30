@@ -1,35 +1,37 @@
 import sqlite3
-import sys
-from pathlib import Path
 
 import numpy as np
-from scipy.stats import poisson
 import scipy.optimize as optimize
 
 from models.BaseFootballModel import BaseFootballModel
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from utilityDB import save_team_parameter, save_global_parameter
+from utilityDB import save_global_parameter
+from save_to_db import save_poisson_params
 from utilityFunctions import measure_time
 
 
 class PoissonModel(BaseFootballModel):
-    def __init__(self, ordered_teams, home_advantage=True, max_goals=7):
+    def __init__(self, ordered_teams, home_team_var="home_team_name", away_team_var="away_team_name",
+                 home_advantage=True, max_goals=7):
         """
 
         Parameters
         ----------
         ordered_teams: must input a list of teams in alphabetical order
+        home_team_var: column name to use for home team identification
+        away_team_var: column name to use for away team identification
         home_advantage: boolean variable, considering extra home advantage parameter
         max_goals: number of goals to consider when estimating probabilities
         """
         super().__init__(ordered_teams, home_advantage, max_goals)
 
-        self.db_table_name = "team_parameters"
+        self.home_team_var = home_team_var
+        self.away_team_var = away_team_var
+
+        self.db_table_name = "poisson_params_v1"
 
     @measure_time
-    def fit(self, df, save_db=True, x0=None):
+    def fit(self, df, save_db=False, x0=None):
         """
 
         Parameters
@@ -59,24 +61,9 @@ class PoissonModel(BaseFootballModel):
         self.result = result
         self.attack, self.defence, self.home_adv_param = self._unpack_params(result.x)
 
+        # Save parameters to a database for ease of access
         if save_db:
-            save_global_parameter("home_advantage", self.home_adv_param)
-            for i in range(self.number_of_teams):
-                save_team_parameter(
-                    self.ordered_teams[i],
-                    self.attack[i],
-                    self.defence[i],
-                    self.db_table_name
-                )
-
-        # print("Success:", result.success)
-        # print("Message:", result.message)
-        # print("Iterations:", result.nit)
-        # print("Loss:", result.fun)
-        # print("Gradient:", result.jac)
-        #
-        # if not result.success:
-        #     raise RuntimeError(result.message)
+            self._save_params()
 
         self.is_fitted = True
 
@@ -85,9 +72,9 @@ class PoissonModel(BaseFootballModel):
             cursor = connect.cursor()
 
             cursor.execute(
-                """
-                SELECT country, attack, defence
-                FROM team_parameters
+                f"""
+                SELECT team_name, attack, defence
+                FROM {self.db_table_name}
                 """
             )
 
@@ -95,29 +82,29 @@ class PoissonModel(BaseFootballModel):
 
             params = {}
 
-            for country, attack_value, defence_value in rows:
-                params[country] = (attack_value, defence_value)
+            for team_name, attack_value, defence_value in rows:
+                params[team_name] = (attack_value, defence_value)
 
             attack, defence = [], []
 
-            for country in self.ordered_teams:
-                if country not in params:
-                    raise ValueError(f"No saved parameters found for {country}.")
+            for team_name in self.ordered_teams:
+                if team_name not in params:
+                    raise ValueError(f"No saved parameters found for {team_name}.")
 
-                attack_value, defence_value = params[country]
+                attack_value, defence_value = params[team_name]
 
                 attack.append(attack_value)
                 defence.append(defence_value)
 
             home_adv_param = 0
-            if self.home_advantage:
+            if self.home_advantage: # todo: updated the database table
                 cursor.execute(
                     """
                     SELECT param_value
                     FROM global_variables
                     WHERE param_name = ?
                     """,
-                    ("home_advantage",)
+                    ("home_advantage_poisson_v1",)
                 )
 
                 result = cursor.fetchone()
@@ -164,8 +151,8 @@ class PoissonModel(BaseFootballModel):
         attack, defence, home_adv = self._unpack_params(params)
 
         for _, row in df.iterrows():
-            home_index = self.team_to_index[row["home_team_name"]]
-            away_index = self.team_to_index[row["away_team_name"]]
+            home_index = self.team_to_index[row[self.home_team_var]]
+            away_index = self.team_to_index[row[self.away_team_var]]
 
             eta_home = attack[home_index] + defence[away_index] + home_adv
             eta_away = attack[away_index] + defence[home_index]
@@ -214,3 +201,21 @@ class PoissonModel(BaseFootballModel):
             gamma = 0
 
         return alpha, beta, gamma
+
+    def _save_params(self):
+        """
+        After fitting the model, save parameters.
+
+        Returns
+        -------
+        nothing, just saved data in sqlite
+        """
+        save_global_parameter("home_advantage_poisson_v1", self.home_adv_param)
+        for i in range(self.number_of_teams):
+            save_poisson_params(
+                self.db_table_name,
+                self.ordered_teams[i],
+                self.attack[i],
+                self.defence[i]
+            )
+        print("Saved Parameters")

@@ -1,8 +1,45 @@
+# =========================
+# Python
+# =========================
 __pycache__/
+*.py[cod]
+*.pyo
 
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+env/
+
+# =========================
+# IDE
+# =========================
+.idea/
+.vscode/
+
+# =========================
+# Project data
+# =========================
 data/
-notes/
-schema.sql
-world_cup.db
-create_db.py
 scr/getting_data/downloaded_files/
+
+# =========================
+# Databases
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# Personal notes
+# =========================
+notes/
+
+# =========================
+# Temporary / OS files
+# =========================
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
