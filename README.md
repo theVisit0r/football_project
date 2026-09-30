@@ -17,16 +17,18 @@ Currently implemented:
 
 The basic Poisson specification is
 
-\[
+The basic Poisson specification is
+
+$$
 \lambda_{ij}^{H} = \exp(\alpha_i + \beta_j + \gamma)
-\]
+$$
 
-\[
+$$
 \lambda_{ij}^{A} = \exp(\alpha_j + \beta_i)
-\]
+$$
 
-where `α` represents attacking strength, `β` defensive strength and `γ` home advantage.
-
+where $\alpha$ represents attacking strength, $\beta$ defensive strength,
+and $\gamma$ home advantage.
 Parameters are estimated by minimising the negative log-likelihood of observed match results.
 
 ## Project Structure
